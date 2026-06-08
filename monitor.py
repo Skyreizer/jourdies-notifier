@@ -8,6 +8,7 @@ import json
 import re
 import smtplib
 import sys
+import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -23,6 +24,17 @@ import pdfplumber
 class ActsMonitor:
     """Monitor for Haute-Savoie administrative acts."""
 
+    # Browser-like headers to avoid being blocked
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Cache-Control": "max-age=0",
+    }
+
     def __init__(self, config_path: str = "config.json"):
         """Initialize the monitor with configuration."""
         self.config = self._load_config(config_path)
@@ -32,6 +44,8 @@ class ActsMonitor:
         self.acts_url = (
             f"{self.base_url}/Publications/Actes-administratifs/{self.config['year']}"
         )
+        self.session = requests.Session()
+        self.session.headers.update(self.HEADERS)
 
     def _load_config(self, config_path: str) -> dict:
         """Load configuration from JSON file."""
@@ -70,8 +84,20 @@ class ActsMonitor:
             url = f"{self.acts_url}/(offset)/{offset}" if offset > 0 else self.acts_url
 
             try:
-                response = requests.get(url, timeout=30)
-                response.raise_for_status()
+                # Add retry logic with exponential backoff
+                for attempt in range(3):
+                    try:
+                        response = self.session.get(url, timeout=30)
+                        response.raise_for_status()
+                        break
+                    except requests.RequestException as e:
+                        if attempt < 2:
+                            wait_time = (attempt + 1) * 2  # 2, 4 seconds
+                            print(f"   Retry {attempt + 1}/3 after {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            raise
+
                 soup = BeautifulSoup(response.content, "html.parser")
 
                 # Find all document links
@@ -82,6 +108,10 @@ class ActsMonitor:
 
                 documents.extend(page_docs)
                 page_num += 1
+
+                # Be polite - small delay between pages
+                if page_num < max_pages:
+                    time.sleep(1)
 
             except requests.RequestException as e:
                 print(f"Error fetching page {page_num}: {e}")
@@ -136,7 +166,7 @@ class ActsMonitor:
     def download_and_parse_pdf(self, url: str) -> str:
         """Download a PDF and extract its text content."""
         try:
-            response = requests.get(url, timeout=60)
+            response = self.session.get(url, timeout=60)
             response.raise_for_status()
 
             # Save temporarily
