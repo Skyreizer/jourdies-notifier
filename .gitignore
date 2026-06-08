@@ -1,0 +1,16 @@
+# State and logs
+state.json
+*.log
+
+# Virtual environment
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Sensitive config (backup original as config.example.json)
+config.json
+
+# Temporary files
+*.pdf
+/tmp/

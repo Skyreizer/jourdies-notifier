@@ -1,0 +1,16 @@
+{
+  "year": 2026,
+  "max_pages_to_check": 3,
+  "state_file": "state.json",
+
+  "search_terms": ["Your Search Term Here", "Another Term"],
+
+  "email": {
+    "server": "smtp.gmail.com",
+    "port": 587,
+    "from": "your-email@gmail.com",
+    "to": "recipient@example.com",
+    "username": "your-email@gmail.com",
+    "password": "your-app-password-here"
+  }
+}
